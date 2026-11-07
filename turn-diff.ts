@@ -42,7 +42,7 @@ const MAX_STORED_PATCH = 80_000;
 const MAX_UNTRACKED_BYTES = 200_000;
 /** 不展开卡片时最多列几个文件。 */
 const VISIBLE_FILES = 8;
-/** 折叠时最多画几行 patch。 */
+/** 自动贴的卡片如果带正文，折叠时只画这么多行（手动要正文时全量渲染）。 */
 const VISIBLE_PATCH_LINES = 30;
 /** 行内高亮最多处理多少个 token（太长的行只做整行底色）。 */
 const MAX_INLINE_TOKENS = 400;
@@ -171,8 +171,10 @@ interface ReportData {
   /** 本轮 unified diff 正文（可选；CLI 的 --patch 与会话里的 patch 卡用它）。 */
   patch?: string;
   patchTruncated?: boolean;
-  /** 只在 `/turn-diff patch` 时置位：卡片里展开 patch。 */
+  /** 只在 `/turn-diff file` 时置位：卡片里渲染正文。 */
   showPatch?: boolean;
+  /** 正文是否全量渲染（显式要过正文就是 true，不再按 30 行折叠）。 */
+  fullPatch?: boolean;
 }
 
 interface StoredTurn extends ReportData {
@@ -610,7 +612,7 @@ function registerRenderer(pi: ExtensionAPI): void {
     }
     if (data.showPatch && data.patch) {
       const painted = renderPatch(data.patch);
-      const patchLimit = expanded ? painted.length : VISIBLE_PATCH_LINES;
+      const patchLimit = expanded || data.fullPatch ? painted.length : VISIBLE_PATCH_LINES;
       for (const line of painted.slice(0, patchLimit)) {
         box.addChild(new Text(line, 0, 0));
       }
@@ -778,7 +780,7 @@ export default function (pi: ExtensionAPI) {
           const position = options.indexOf(picked);
           chosen = position <= 0 ? chunks : [chunks[position - 1]];
         }
-        report = { ...report, patch: chosen.map((chunk) => chunk.text).join("\n"), showPatch: true };
+        report = { ...report, patch: chosen.map((chunk) => chunk.text).join("\n"), showPatch: true, fullPatch: true };
       }
 
       pi.appendEntry(ENTRY_TYPE, report);

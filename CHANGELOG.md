@@ -15,6 +15,12 @@ All notable changes to this project will be documented in this file.
 - **为什么**：用户指出两点——(1) 会话里写 `patch`、命令行写 `--file`，两处用词不一致，应该都叫 `file`（`/turn-diff file 2`）；(2) 本项目专注「本轮 diff」，`head`（工作区相对 HEAD 的全量）属于另一个问题，不该混进来。
 - **改了什么**：会话命令改成 `file`（`patch` 保留为别名），命令行从 `--patch` / `--file` 改成动词形式 `turn-diff file`、`turn-diff file 2`、`turn-diff file '*.ts'`、`turn-diff list`，两侧词表完全一致；`--patch` / `--file` / `--list` / `--turn` 作为兼容别名保留。删掉 `head` 口径（`captureHeadBaseline`、`scope` 字段分支一并移除），误输 `head` 时明确提示「本项目只看本轮，要看全部未提交改动请用 git diff」。
 - **验证**：假状态（两轮、三轮次文件）跑过 `list`、`file 1/2/3` 各自命中正确文件、`file '*.md'` 通配、`2 file` 取第二轮、`--file 3`、`head` 退出码 2 并给出提示、`file 9` 越界报错。
+### 修复（显式要正文时不该再折叠）
+
+- **问题**：`/turn-diff file` 是用户明确要正文，卡片却仍按 30 行折叠，末尾留一句「…patch 还有 2 行（展开查看）」，看起来像没展开完全。
+- **改法**：`/turn-diff file` 生成的卡片带 `fullPatch`，渲染时全量输出；30 行折叠只保留给「自动贴且带正文」这种没主动要正文的场景（自动贴本身默认不贴正文，所以这条基本不触发）。
+- **验证**：用 60 对 `-`/`+` 行的 patch 跑渲染器，输出 124 行（表头 + 120 行内容 + 空行），确认不再截断。
+
 
 
 ## [2.0.0] - 2026-11-07
