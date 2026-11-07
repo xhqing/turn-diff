@@ -613,12 +613,41 @@ function buildAfterSideFragment(chunkText: string): string {
   return out.join("\n").replace(/^\n+/, "").replace(/\n+$/, "");
 }
 
+/** 用足够长的围栏包住内容，避免内容里自带的 ``` 把代码块切断。 */
+function fenced(language: string, body: string): string {
+  const longest = Math.max(0, ...(body.match(/`+/g) ?? []).map((run) => run.length));
+  const fence = "`".repeat(Math.max(3, longest + 1));
+  return `${fence}${language}\n${body}\n${fence}`;
+}
+
+/**
+ * 组装交给 cmux 渲染的文档。
+ *
+ * 两段：上面是彩色 diff（```diff 走 hljs，新增行绿底、删除行红底——这是唯一能在
+ * markdown 面板里上色的方式，样式属性会被 sanitizer 清掉）；下面是「改后」的 markdown，
+ * 由 cmux 的 KaTeX 把公式排版出来。两者合起来：看得到删了什么加了什么，也看得到排版。
+ */
+function buildRenderDocument(chunkText: string): string {
+  const diffLines: string[] = [];
+  const meta = /^(diff --git |index |--- |\+\+\+ |new file mode|deleted file mode|old mode|new mode|similarity index|rename from|rename to)/;
+  for (const line of chunkText.split("\n")) {
+    if (meta.test(line)) continue;
+    diffLines.push(line);
+  }
+  const afterSide = buildAfterSideFragment(chunkText);
+  const sections = ["**改动**（`+` 绿底为新增、`-` 红底为删除）", "", fenced("diff", diffLines.join("\n").replace(/\n+$/, ""))];
+  if (afterSide.trim()) {
+    sections.push("", "**改后**（下方为渲染结果，公式已排版）", "", afterSide);
+  }
+  return sections.join("\n") + "\n";
+}
+
 /** 把「改后片段」写到临时文件并交给 cmux 的 markdown 面板（不抢焦点）。 */
 async function openRenderedInCmux(chunk: PatchChunk): Promise<{ ok: boolean; message: string }> {
   const cli = findCmuxCli();
   if (!cli) return { ok: false, message: "没找到 cmux（/Applications 下没有 cmux*.app），无法渲染。" };
-  const fragment = buildAfterSideFragment(chunk.text);
-  if (!fragment.trim()) return { ok: false, message: "这个文件的改动没有「改后」内容（只有删除行）。" };
+  const fragment = buildRenderDocument(chunk.text);
+  if (!fragment.trim()) return { ok: false, message: "这个文件的改动没有可显示的内容。" };
   const target = path.join(os.tmpdir(), `turn-diff-view-${Date.now()}.md`);
   try {
     fs.writeFileSync(target, fragment + "\n");
