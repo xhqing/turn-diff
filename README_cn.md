@@ -2,7 +2,7 @@
   <img src="assets/logo.svg" alt="turn-diff" width="640">
 
   [![License: MIT](https://img.shields.io/badge/License-MIT-yellow)](LICENSE.md)
-  [![Version](https://img.shields.io/badge/Version-2.1.0-blue)](CHANGELOG.md)
+  [![Version](https://img.shields.io/badge/Version-2.2.0-blue)](CHANGELOG.md)
   [![Type](https://img.shields.io/badge/Type-pi%20extension-6E56CF)](#)
   [![Platform](https://img.shields.io/badge/Platform-git-000000)](#)
 
@@ -42,6 +42,7 @@
 /turn-diff file         这一轮所有文件的正文
 /turn-diff file 2       只看列表里的第 2 个文件
 /turn-diff file src/    只看路径匹配这个片段 / 通配的文件
+/turn-diff view 2       把这个文件的「改后」片段交给 cmux 渲染（公式可排版）
 /turn-diff 2            再往前一轮
 /turn-diff 2 file 3     那一轮里的第 3 个文件
 /turn-diff on|off       每轮结束是否自动贴（默认关）
@@ -57,6 +58,7 @@ turn-diff file 2            只看第 2 个文件
 turn-diff file '*.ts'       只看路径匹配的文件
 turn-diff 2                 看再往前一轮（1 = 最近一轮）
 turn-diff 2 file 3          那一轮里的第 3 个文件
+turn-diff view 2            把第 2 个文件的「改后」片段交给 cmux 渲染
 turn-diff --repo ~/x        指定仓库
 turn-diff --all             每个有轮次报告的仓库各一行摘要
 turn-diff --json            机器可读输出
@@ -64,6 +66,18 @@ turn-diff --color always    强制上色（另有 auto / never）
 ```
 
 `turn-diff` 只读扩展落盘的状态，不启动 pi、不触发任何轮次。
+
+## 渲染视图（可选，需要 cmux）
+
+Markdown 文章的 diff 里 `$...$` 是源码。想把「改动的那部分」当成排版后的文字来读，就交给 cmux 的 markdown 面板：
+
+```
+turn-diff view 2        # 会话里 /turn-diff view 2 同效
+```
+
+它会取该文件各 hunk 的「改后」一侧（上下文 + 新增行，去掉 diff 标记），写成临时 `.md`，再用 `cmux markdown open --focus false` 打开（不抢焦点）。cmux 自带 KaTeX，公式是真的排版出来的。
+
+边界：这是**片段**不是整篇——跨 hunk 的 Markdown 结构（被切开的表格、断掉的段落）可能排版怪异，相对图片路径多半也解析不了。另外这个子命令需要 cmux；其余功能仍然是纯 git。
 
 ## 颜色
 

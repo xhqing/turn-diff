@@ -2,7 +2,7 @@
   <img src="assets/logo.svg" alt="turn-diff" width="640">
 
   [![License: MIT](https://img.shields.io/badge/License-MIT-yellow)](LICENSE.md)
-  [![Version](https://img.shields.io/badge/Version-2.1.0-blue)](CHANGELOG.md)
+  [![Version](https://img.shields.io/badge/Version-2.2.0-blue)](CHANGELOG.md)
   [![Type](https://img.shields.io/badge/Type-pi%20extension-6E56CF)](#)
   [![Platform](https://img.shields.io/badge/Platform-git-000000)](#)
 
@@ -42,6 +42,7 @@ The script deploys two things:
 /turn-diff file         the unified diff of the whole turn
 /turn-diff file 2       only file #2 from the listing
 /turn-diff file src/    only files whose path matches a fragment or glob
+/turn-diff view 2       hand the after-side of file #2 to cmux's markdown panel (math renders)
 /turn-diff 2            the turn before last
 /turn-diff 2 file 3     file #3 of that turn
 /turn-diff on|off       paste automatically at the end of every turn (default: off)
@@ -57,6 +58,7 @@ turn-diff file 2            only file #2 from the listing
 turn-diff file '*.ts'       only matching paths
 turn-diff 2                 one turn further back (1 = the latest)
 turn-diff 2 file 3          file #3 of that turn
+turn-diff view 2            open the after-side of file #2 in cmux (KaTeX renders the math)
 turn-diff --repo ~/x        same for another repo
 turn-diff --all             one line per repo that has a turn report
 turn-diff --json            machine-readable output
@@ -64,6 +66,18 @@ turn-diff --color always    force colors (auto / never for the other modes)
 ```
 
 `turn-diff` only reads the state the extension persisted, so it never starts a pi session and never touches a turn.
+
+## Rendered view (optional, needs cmux)
+
+A diff of a Markdown article shows raw `$...$`. When you want to *read* the changed part with the math typeset, hand it to cmux's Markdown panel:
+
+```
+turn-diff view 2        # or /turn-diff view 2 inside a session
+```
+
+It takes the after-side of that file's hunks (context + added lines, minus the diff markers), writes a temporary `.md`, and opens it in cmux's Markdown viewer (`cmux markdown open --focus false`, so it does not steal focus). cmux bundles KaTeX, so formulas are really typeset there.
+
+Caveats: this is a fragment, not the whole file — Markdown structures that start outside the hunk (a table split by the hunk, a paragraph cut in half) may render oddly, and relative image paths probably will not resolve. It also means this one subcommand needs cmux; everything else stays pure git.
 
 ## Colors
 

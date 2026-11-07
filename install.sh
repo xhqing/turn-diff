@@ -41,6 +41,7 @@ echo "  /turn-diff                 把上一轮 AI 改了什么贴进会话（�
 echo "  /turn-diff file            带上 unified diff 正文（绿底新增 / 红底删除；多文件时让你挑）"
 echo "  /turn-diff file 2          只看列表里的第 2 个文件"
 echo "  /turn-diff list            只列文件与编号"
+echo "  /turn-diff view 2          把该文件的改后片段交给 cmux 渲染（公式可排版）"
 echo "  /turn-diff 2               更早一轮"
 echo "  /turn-diff on|off          切换每轮结束是否自动贴"
 echo
