@@ -74,7 +74,7 @@ Diff bodies are painted like a change view, not like a log:
 
 Colors follow the terminal by default (TTY only); `--color never` turns them off, `--color always` forces them through a pipe. In the session card the same palette is used.
 
-A turn that touched several files does not dump everything at once: `/turn-diff file` opens a picker (all files or one), and `/turn-diff file <#>|<pattern>` goes straight to one file. The command line uses the same words: `turn-diff file 2`.
+A turn that touched several files does not dump everything at once: `/turn-diff file` opens a picker (all files or one), and `/turn-diff file <#>|<pattern>` goes straight to one file. What you asked for is rendered in full — no "30 lines, expand to see the rest" — and the command line uses the same words: `turn-diff file 2`.
 
 ## How it works
 
