@@ -42,7 +42,8 @@
 /turn-diff file         这一轮所有文件的正文
 /turn-diff file 2       只看列表里的第 2 个文件
 /turn-diff file src/    只看路径匹配这个片段 / 通配的文件
-/turn-diff view 2       把这个文件的「改后」片段交给 cmux 渲染（公式可排版）
+/turn-diff view 2       在 cmux 的 diff 面板打开这个文件（行级红绿，可开词级高亮）
+/turn-diff render 2     把这个文件的「改后」片段交给 cmux 的 markdown 面板（公式排版）
 /turn-diff 2            再往前一轮
 /turn-diff 2 file 3     那一轮里的第 3 个文件
 /turn-diff on|off       每轮结束是否自动贴（默认关）
@@ -58,7 +59,8 @@ turn-diff file 2            只看第 2 个文件
 turn-diff file '*.ts'       只看路径匹配的文件
 turn-diff 2                 看再往前一轮（1 = 最近一轮）
 turn-diff 2 file 3          那一轮里的第 3 个文件
-turn-diff view 2            把第 2 个文件的「改后」片段交给 cmux 渲染
+turn-diff view 2            在 cmux 的 diff 面板打开第 2 个文件
+turn-diff render 2          把第 2 个文件的「改后」片段交给 cmux 的 markdown 面板渲染
 turn-diff --repo ~/x        指定仓库
 turn-diff --all             每个有轮次报告的仓库各一行摘要
 turn-diff --json            机器可读输出
@@ -67,13 +69,16 @@ turn-diff --color always    强制上色（另有 auto / never）
 
 `turn-diff` 只读扩展落盘的状态，不启动 pi、不触发任何轮次。
 
-## 渲染视图（可选，需要 cmux）
+## cmux 面板（可选，需要 cmux）
 
-Markdown 文章的 diff 里 `$...$` 是源码。想把「改动的那部分」当成排版后的文字来读，就交给 cmux 的 markdown 面板：
+两个面板管两件事，按你要回答的问题选：
 
-```
-turn-diff view 2        # 会话里 /turn-diff view 2 同效
-```
+| 命令 | 面板 | 看什么 | 公式 |
+|---|---|---|---|
+| `turn-diff view 2` | cmux 的 diff 视图 | 该文件的 patch，行级红绿；在那个面板的选项菜单里打开 **word diffs** 还能词级高亮 | 原样 `$...$` |
+| `turn-diff render 2` | cmux 的 markdown 视图 | 逐处改动列表 + 彩色 diff 围栏 + 改后片段渲染 | 由 KaTeX 排版 |
+
+Markdown 文章的 diff 里 `$...$` 是源码。想把「改动的那部分」当成排版后的文字来读，用 `render`：
 
 生成的临时文档分三段：**逐处改动**列表（把真正变了的片段用 `~~删除~~ → **新增**` 标出来，删了一句话一眼就能看到）、`diff` 代码块（highlight.js 给 `+` 行绿底、`-` 行红底——markdown 的 sanitizer 会清掉行内 `style`，代码围栏是那个面板里唯一能上色的方式）、以及各 hunk 的「改后」一侧（上下文 + 新增行，去掉 diff 标记）按 markdown 渲染。cmux 自带 KaTeX，所以渲染那段的公式是真的排版出来的。用 `cmux markdown open --focus false` 打开，不抢焦点。
 

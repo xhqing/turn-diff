@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 - **改了什么**：新增 `view` 动词（会话 `/turn-diff view 2`、命令行 `turn-diff view 2`）。行为：取该文件各 hunk 的**改后一侧**（上下文 + 新增行，去掉 `diff --git` / `@@` / 删除行），写成临时 `.md`，再调 `cmux markdown open <临时文件> --focus false` 用 cmux 的 markdown 面板渲染；成功后回报面板引用，不抢焦点。找不到 cmux 时明确报错，不影响其它子命令。
 - **补：颜色与排版兼得**（同日修订）：只给「改后」会把 +/- 信息丢掉，看不出删了什么。生成文档改成两段——上面 `diff` 围栏（highlight.js 给 `+` 绿底、`-` 红底；markdown sanitizer 会清掉行内 `style`，所以这是那个面板里唯一的上色途径），下面渲染「改后」（KaTeX 排版公式）。围栏长度按内容里的反引号自动加长，避免文章内嵌的代码块把围栏切断。
 - **补：逐处改动列表**（同日再修订）：代码围栏只能整行上色，看不出「这句话里删了哪几个字」。文档最前面加一段「逐处改动」——把成对 `-`/`+` 行做词级 diff，只列真正变化的片段，删除用 `~~删除线~~`、新增用 `**加粗**`（渲染成真 markdown）。实测那篇文章的改动显示为 `- ~~（一般形式见上文那句话）~~`，被删的正是那句话。
+- **拆成两个面板**（同日修订）：用户提醒「cmux 的 diff-viewer 本来就有词级高亮」。核实：`view` 之前用的是 cmux 的 **markdown 面板**（带 KaTeX，但只能整行上色），而 cmux 另有 **diff 面板**——自带行级红绿，`wordDiffs` 选项（选项菜单里打开，存在 `~/Library/Application Support/cmux/diff-viewer/preferences.json`）还能词级高亮，只是不渲染 markdown/数学。所以按目的地拆开：`view` → cmux diff 面板（`cmux diff <临时 patch> --title <文件> --no-focus`），`render` → 原来的 markdown 渲染。
 - **验证**：拿 SocialMediaManagerAgent 那篇文章的上一轮改动实测——`turn-diff list` 列出 3 个文件，`turn-diff view 1` 生成 15 行「改后」片段（其中 6 行含公式），cmux 打开 `surface:1000100057`，面板标题是临时文件；测试用的两个旧面板已关掉。
 - **边界**：这是片段不是整篇，跨 hunk 的 Markdown 结构（被切开的表格、断掉的段落）可能排版怪异，相对图片路径多半解析不了；`view` 是唯一需要 cmux 的子命令，其余功能仍为纯 git。
 
