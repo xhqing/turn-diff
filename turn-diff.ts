@@ -594,48 +594,47 @@ function findCmuxCli(): string | null {
   return found[0] ?? null;
 }
 
-/**
- * 把某个文件的 diff 段落转成「改后」的 markdown 片段：保留上下文与新增行、丢掉删除行与 diff 头。
- * 用来交给 cmux 的 markdown 面板渲染（那边带 KaTeX，公式能排版）。
- */
-function buildAfterSideFragment(chunkText: string): string {
-  const out: string[] = [];
-  const meta = /^(diff --git |index |--- |\+\+\+ |@@|new file mode|deleted file mode|old mode|new mode|similarity index|rename from|rename to)/;
-  for (const line of chunkText.split("\n")) {
-    if (meta.test(line)) continue;
-    if (line.startsWith("-")) continue;
-    if (line.startsWith("+") || line.startsWith(" ")) {
-      out.push(line.slice(1));
-      continue;
-    }
-    out.push(line);
-  }
-  return out.join("\n").replace(/^\n+/, "").replace(/\n+$/, "");
+/** HTML 转义：正文里的 < > & 不能原样塞进 span，否则会破坏结构。 */
+function escapeHtml(text: string): string {
+  // `~` 也要转义：否则原文里的 ~~删除线~~ 会被 markdown 当成真删除线，和本次改动混淆
+  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/~/g, "&#126;");
 }
 
-/** 用足够长的围栏包住内容，避免内容里自带的 ``` 把代码块切断。 */
-function fenced(language: string, body: string): string {
-  const longest = Math.max(0, ...(body.match(/`+/g) ?? []).map((run) => run.length));
-  const fence = "`".repeat(Math.max(3, longest + 1));
-  return `${fence}${language}\n${body}\n${fence}`;
+/** 原文里本来就有删除线 / 下划线标记吗（用来提示可能混淆）。 */
+function hasOwnMarks(text: string): boolean {
+  return /~~|\<\/?u\>|\<\/?ins\>|\<\/?del\>|\<\/?s\>/.test(text);
 }
 
 /**
- * 把成对的 `-`/`+` 行做成「逐处改动」列表：删除的片段用 `~~..~~`、新增的用 `**..**`。
+ * 组装 `render` 交给 cmux markdown 面板的文档。
  *
- * 为什么需要它：代码围栏里只能整行上色（markdown 的 sanitizer 不允许行内样式），
- * 一眼看不出「这句话里到底删了哪几个字」。渲染成真正的 markdown 段落就能用删除线/加粗。
+ * 只呈现「红的删除行 / 绿的新增行」：整行套 `.hljs-deletion` / `.hljs-addition`（cmux 的
+ * diff CSS 给了红/绿底色与浅色字，这是那个面板里唯一能用上颜色的方式——sanitizer 会清掉
+ * 行内 style），行内真正变了的片段再用 `<del>` 划中划线、`<u>` 加下划线。上下文行一律不渲染，
+ * 也不放源码围栏（要看源码请用 `/turn-diff file`）。
  */
-function buildChangeHints(chunkText: string): string[] {
+function buildRenderDocument(chunkText: string): string {
   const lines = chunkText.split("\n");
-  const hints: string[] = [];
+  const out: string[] = [];
+  let ambiguous = false;
+  const wrap = (kind: "deletion" | "addition", line: string, segments: Array<[string, boolean]>, mark: "del" | "u") => {
+    const body = segments
+      .map(([text, strong]) => (strong ? `<${mark}>${escapeHtml(text)}</${mark}>` : escapeHtml(text)))
+      .join("");
+    out.push(`<span class="hljs-${kind}">${body}</span>`);
+    out.push("");
+  };
+
   let index = 0;
-  while (index < lines.length && hints.length < 20) {
+  while (index < lines.length) {
     const line = lines[index];
-    if (!line.startsWith("-") || line.startsWith("--- ")) {
+    const isRemoved = line.startsWith("-") && !line.startsWith("--- ");
+    const isAdded = line.startsWith("+") && !line.startsWith("+++ ");
+    if (!isRemoved && !isAdded) {
       index += 1;
       continue;
     }
+    // 收集连续的删除行与紧随其后的新增行，按顺序配对做词级 diff
     const removed: string[] = [];
     while (index < lines.length && lines[index].startsWith("-") && !lines[index].startsWith("--- ")) {
       removed.push(lines[index].slice(1));
@@ -647,83 +646,36 @@ function buildChangeHints(chunkText: string): string[] {
       index += 1;
     }
     const pairs = Math.min(removed.length, added.length);
-    for (let pair = 0; pair < pairs && hints.length < 20; pair += 1) {
+    for (let pair = 0; pair < pairs; pair += 1) {
+      if (hasOwnMarks(removed[pair]) || hasOwnMarks(added[pair])) ambiguous = true;
       const { del, add } = inlineTokens(removed[pair], added[pair]);
-      const delText = del
-        .filter(([, strong]) => strong)
-        .map(([text]) => text)
-        .join("");
-      const addText = add
-        .filter(([, strong]) => strong)
-        .map(([text]) => text)
-        .join("");
-      if (!delText && !addText) continue;
-      const parts: string[] = [];
-      if (delText) parts.push(`~~${delText}~~`);
-      if (addText) parts.push(`**${addText}**`);
-      hints.push(`- ${parts.join(" → ")}`);
+      wrap("deletion", removed[pair], del, "del");
+      wrap("addition", added[pair], add, "u");
     }
-    // 没配上的行也提示一下（整行新增 / 整行删除）
     for (const text of removed.slice(pairs)) {
-      if (hints.length >= 20) break;
-      hints.push(`- ~~${text}~~`);
+      if (hasOwnMarks(text)) ambiguous = true;
+      wrap("deletion", text, [[text, false]], "del");
     }
     for (const text of added.slice(pairs)) {
-      if (hints.length >= 20) break;
-      hints.push(`- **${text}**`);
+      if (hasOwnMarks(text)) ambiguous = true;
+      wrap("addition", text, [[text, false]], "u");
     }
   }
-  return hints;
-}
 
-/**
- * 组装交给 cmux 渲染的文档。
- *
- * 两段：上面是彩色 diff（```diff 走 hljs，新增行绿底、删除行红底——这是唯一能在
- * markdown 面板里上色的方式，样式属性会被 sanitizer 清掉）；下面是「改后」的 markdown，
- * 由 cmux 的 KaTeX 把公式排版出来。两者合起来：看得到删了什么加了什么，也看得到排版。
- */
-function buildRenderDocument(chunkText: string): string {
-  const diffLines: string[] = [];
-  const meta = /^(diff --git |index |--- |\+\+\+ |new file mode|deleted file mode|old mode|new mode|similarity index|rename from|rename to)/;
-  for (const line of chunkText.split("\n")) {
-    if (meta.test(line)) continue;
-    diffLines.push(line);
+  const header = [
+    "**改动**：<span class=\"hljs-deletion\">红底=删除行</span>（被删的片段加<del>中划线</del>）、"
+      + "<span class=\"hljs-addition\">绿底=新增行</span>（新增的片段加<u>下划线</u>）。未变动的行不在这里显示。",
+  ];
+  if (ambiguous) {
+    header.push(
+      "",
+      "> ⚠️ 这一轮的改动内容里本来就有删除线 / 下划线标记（`~~`、`<u>`、`<ins>` 之类），下面的颜色与划线是本次改动的标记，可能和原文样式混在一起——原文里的标记这里一律按字面显示。",
+    );
   }
-  const afterSide = buildAfterSideFragment(chunkText);
-  const sections: string[] = [];
-  const hints = buildChangeHints(chunkText);
-  if (hints.length > 0) {
-    sections.push("**逐处改动**（~~删除~~ → **新增**）", "", hints.join("\n"), "");
+  if (out.length === 0) {
+    return "";
   }
-  sections.push("**整段 diff**（`+` 绿底为新增、`-` 红底为删除）", "", fenced("diff", diffLines.join("\n").replace(/\n+$/, "")));
-  if (afterSide.trim()) {
-    sections.push("", "**改后**（下方为渲染结果，公式已排版）", "", afterSide);
-  }
-  return sections.join("\n") + "\n";
-}
-
-/**
- * 把某个文件的 patch 交给 cmux 的 diff 面板。
- *
- * 那个面板是 cmux 自己的 diff viewer：自带行级绿/红，以及 `wordDiffs` 选项（词级高亮，
- * 在它的选项菜单里可开）。它不渲染 markdown / 数学，所以和 `render` 是两条路。
- */
-async function openPatchInCmux(chunk: PatchChunk): Promise<{ ok: boolean; message: string }> {
-  const cli = findCmuxCli();
-  if (!cli) return { ok: false, message: "没找到 cmux（/Applications 下没有 cmux*.app），无法打开 diff 面板。" };
-  const target = path.join(os.tmpdir(), `turn-diff-patch-${Date.now()}.patch`);
-  try {
-    fs.writeFileSync(target, chunk.text.endsWith("\n") ? chunk.text : `${chunk.text}\n`);
-  } catch (error) {
-    return { ok: false, message: `写临时 patch 失败：${String(error)}` };
-  }
-  const result = await run(cli, ["diff", target, "--title", chunk.path, "--no-focus"], undefined, 30_000);
-  if (!result.ok) {
-    return { ok: false, message: `cmux diff 打开失败：${(result.stderr || result.error || "").trim().split("\n")[0]}` };
-  }
-  const surface = /surface=\S+/.exec(result.stdout)?.[0] ?? "";
-  return { ok: true, message: `已在 cmux 的 diff 面板打开：${chunk.path}（${surface || "面板已打开"}，未抢焦点）` };
+  return [...header, "", ...out].join("\n").replace(/\n{3,}/g, "\n\n").trimEnd() + "\n";
 }
 
 /** 把「改后片段」写到临时文件并交给 cmux 的 markdown 面板（不抢焦点）。 */

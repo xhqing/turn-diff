@@ -76,11 +76,11 @@ turn-diff --color always    强制上色（另有 auto / never）
 | 命令 | 面板 | 看什么 | 公式 |
 |---|---|---|---|
 | `turn-diff view 2` | cmux 的 diff 视图 | 该文件的 patch，行级红绿；在那个面板的选项菜单里打开 **word diffs** 还能词级高亮 | 原样 `$...$` |
-| `turn-diff render 2` | cmux 的 markdown 视图 | 逐处改动列表 + 彩色 diff 围栏 + 改后片段渲染 | 由 KaTeX 排版 |
+| `turn-diff render 2` | cmux 的 markdown 视图 | 只给改动行：删除行红色、被删的字加中划线；新增行绿色、新增的字加下划线；未变动的行不显示 | 由 KaTeX 排版 |
 
 Markdown 文章的 diff 里 `$...$` 是源码。想把「改动的那部分」当成排版后的文字来读，用 `render`：
 
-生成的临时文档分三段：**逐处改动**列表（把真正变了的片段用 `~~删除~~ → **新增**` 标出来，删了一句话一眼就能看到）、`diff` 代码块（highlight.js 给 `+` 行绿底、`-` 行红底——markdown 的 sanitizer 会清掉行内 `style`，代码围栏是那个面板里唯一能上色的方式）、以及各 hunk 的「改后」一侧（上下文 + 新增行，去掉 diff 标记）按 markdown 渲染。cmux 自带 KaTeX，所以渲染那段的公式是真的排版出来的。用 `cmux markdown open --focus false` 打开，不抢焦点。
+`render` 只呈现改动行：删除行用红底（`hljs-deletion`）并把被删的字加 `<del>` 中划线；新增行用绿底（`hljs-addition`）并把新增的字加 `<u>` 下划线。颜色借的是那个面板自带的 diff CSS（sanitizer 允许 class、不允许行内 `style`）。未变动的行不显示，也不再放源码围栏——要看源码请用 `file`。如果原文本身就有 `~~` 或 `<u>`，文档开头会明确提示，并把原文标记按字面显示，避免和本次改动的划线混淆。cmux 自带 KaTeX，所以渲染那段的公式是真的排版出来的。用 `cmux markdown open --focus false` 打开，不抢焦点。
 
 边界：这是**片段**不是整篇——跨 hunk 的 Markdown 结构（被切开的表格、断掉的段落）可能排版怪异，相对图片路径多半也解析不了。另外这个子命令需要 cmux；其余功能仍然是纯 git。
 

@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -204,84 +205,72 @@ def find_cmux_cli():
     return found[0]
 
 
-def build_after_side(chunk_text: str) -> str:
-    """把 diff 段落转成「改后」的 markdown 片段：保留上下文与新增行，丢掉删除行与 diff 头。"""
-    out = []
-    for line in chunk_text.split("\n"):
-        if line.startswith(CMUX_META):
-            continue
-        if line.startswith("-"):
-            continue
-        if line[:1] in ("+", " "):
-            out.append(line[1:])
-        else:
-            out.append(line)
-    return "\n".join(out).strip("\n")
+def escape_html(text: str) -> str:
+    # ~ 也要转义：否则原文里的 ~~删除线~~ 会被 markdown 当成真删除线，和本次改动混淆
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("~", "&#126;")
 
 
-def fenced(language: str, body: str) -> str:
-    """用足够长的围栏包住内容，避免内容里自带的 ``` 把代码块切断。"""
-    longest = max([len(run) for run in __import__("re").findall(r"`+", body)] or [0])
-    fence = "`" * max(3, longest + 1)
-    return f"{fence}{language}\n{body}\n{fence}"
+def has_own_marks(text: str) -> bool:
+    return bool(re.search(r"~~|<\/?u>|<\/?ins>|<\/?del>|<\/?s>", text))
 
 
-def build_change_hints(chunk_text: str) -> list[str]:
-    """成对的 -/+ 行 → 「逐处改动」列表：删除片段 ~~删除线~~、新增片段 **加粗**。"""
+def build_render_document(chunk_text: str) -> str:
+    """只呈现红的删除行 / 绿的新增行：整行套 hljs-deletion/addition，词级改动加 del/u。"""
     lines = chunk_text.split("\n")
-    hints: list[str] = []
+    out: list[str] = []
+    ambiguous = False
+
+    def wrap(kind: str, segments: list[tuple[str, bool]], mark: str) -> None:
+        body = "".join(
+            f"<{mark}>{escape_html(text)}</{mark}>" if strong else escape_html(text) for text, strong in segments
+        )
+        out.append(f'<span class="hljs-{kind}">{body}</span>')
+        out.append("")
+
     index = 0
-    while index < len(lines) and len(hints) < 20:
+    while index < len(lines):
         line = lines[index]
-        if not line.startswith("-") or line.startswith("--- "):
+        if not ((line.startswith("-") and not line.startswith("--- ")) or (line.startswith("+") and not line.startswith("+++ "))):
             index += 1
             continue
-        removed: list[str] = []
+        removed = []
         while index < len(lines) and lines[index].startswith("-") and not lines[index].startswith("--- "):
             removed.append(lines[index][1:])
             index += 1
-        added: list[str] = []
+        added = []
         while index < len(lines) and lines[index].startswith("+") and not lines[index].startswith("+++ "):
             added.append(lines[index][1:])
             index += 1
         pairs = min(len(removed), len(added))
         for pair in range(pairs):
-            if len(hints) >= 20:
-                break
+            if has_own_marks(removed[pair]) or has_own_marks(added[pair]):
+                ambiguous = True
             del_segments, add_segments = inline_tokens(removed[pair], added[pair])
-            del_text = "".join(text for text, strong in del_segments if strong)
-            add_text = "".join(text for text, strong in add_segments if strong)
-            if not del_text and not add_text:
-                continue
-            parts = []
-            if del_text:
-                parts.append(f"~~{del_text}~~")
-            if add_text:
-                parts.append(f"**{add_text}**")
-            hints.append("- " + " → ".join(parts))
+            wrap("deletion", del_segments, "del")
+            wrap("addition", add_segments, "u")
         for text in removed[pairs:]:
-            if len(hints) >= 20:
-                break
-            hints.append(f"- ~~{text}~~")
+            if has_own_marks(text):
+                ambiguous = True
+            wrap("deletion", [(text, False)], "del")
         for text in added[pairs:]:
-            if len(hints) >= 20:
-                break
-            hints.append(f"- **{text}**")
-    return hints
+            if has_own_marks(text):
+                ambiguous = True
+            wrap("addition", [(text, False)], "u")
 
-
-def build_render_document(chunk_text: str) -> str:
-    """彩色 diff（```diff 走 hljs 上色）+ 改后的 markdown（由 cmux 的 KaTeX 排版）。"""
-    diff_lines = [line for line in chunk_text.split("\n") if not line.startswith(CMUX_META)]
-    after = build_after_side(chunk_text)
-    parts: list[str] = []
-    hints = build_change_hints(chunk_text)
-    if hints:
-        parts += ["**逐处改动**（~~删除~~ → **新增**）", "", "\n".join(hints), ""]
-    parts += ["**整段 diff**（`+` 绿底为新增、`-` 红底为删除）", "", fenced("diff", "\n".join(diff_lines).rstrip("\n"))]
-    if after.strip():
-        parts += ["", "**改后**（下方为渲染结果，公式已排版）", "", after]
-    return "\n".join(parts) + "\n"
+    if not out:
+        return ""
+    header = [
+        '**改动**：<span class="hljs-deletion">红底=删除行</span>（被删的片段加<del>中划线</del>）、'
+        '<span class="hljs-addition">绿底=新增行</span>（新增的片段加<u>下划线</u>）。未变动的行不在这里显示。',
+    ]
+    if ambiguous:
+        header += [
+            "",
+            "> ⚠️ 这一轮的改动内容里本来就有删除线 / 下划线标记（`~~`、`<u>`、`<ins>` 之类），"
+            "下面的颜色与划线是本次改动的标记，可能和原文样式混在一起——原文里的标记这里一律按字面显示。",
+        ]
+    body = "\n".join(out).rstrip("\n")
+    return "\n".join(header) + "\n\n" + body + "\n"
 
 
 def open_patch_in_cmux(chunk: tuple[str, str]) -> int:
