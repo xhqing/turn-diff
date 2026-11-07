@@ -11,6 +11,7 @@
   turn-diff file              打印这一轮所有文件的正文
   turn-diff file 2            只看第 2 个文件（编号来自 list / 摘要）
   turn-diff file 'src/**'     只看路径匹配的文件（子串或通配）
+  turn-diff view 2            把第 2 个文件的「改后」片段交给 cmux 渲染（公式可排版）
   turn-diff 2                 看再往前一轮
   turn-diff 2 file 3          第 2 轮里的第 3 个文件
   turn-diff --all             每个有轮次报告的仓库各一行摘要
@@ -29,6 +30,8 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -160,6 +163,84 @@ def match_path(candidate: str, pattern: str) -> bool:
     lowered = candidate.lower()
     pattern = pattern.lower()
     return pattern in lowered or fnmatch.fnmatch(lowered, pattern)
+
+
+# ===== 交给 cmux 渲染（可选） =====
+
+CMUX_META = (
+    "diff --git ",
+    "index ",
+    "--- ",
+    "+++ ",
+    "@@",
+    "new file mode",
+    "deleted file mode",
+    "old mode",
+    "new mode",
+    "similarity index",
+    "rename from",
+    "rename to",
+)
+
+
+def find_cmux_cli():
+    """找 /Applications 或 ~/Applications 下 cmux*.app 里的命令行；找不到返回 None。"""
+    homes = [Path("/Applications"), Path.home() / "Applications"]
+    found = []
+    for home in homes:
+        try:
+            for entry in home.iterdir():
+                if not entry.name.lower().startswith("cmux") or not entry.name.endswith(".app"):
+                    continue
+                cli = entry / "Contents/Resources/bin/cmux"
+                if cli.exists():
+                    found.append(cli)
+        except OSError:
+            continue
+    if not found:
+        return None
+    found.sort(key=lambda item: 0 if "STAGING" in str(item) else 1)
+    return found[0]
+
+
+def build_after_side(chunk_text: str) -> str:
+    """把 diff 段落转成「改后」的 markdown 片段：保留上下文与新增行，丢掉删除行与 diff 头。"""
+    out = []
+    for line in chunk_text.split("\n"):
+        if line.startswith(CMUX_META):
+            continue
+        if line.startswith("-"):
+            continue
+        if line[:1] in ("+", " "):
+            out.append(line[1:])
+        else:
+            out.append(line)
+    return "\n".join(out).strip("\n")
+
+
+def open_rendered(chunk: tuple[str, str]) -> int:
+    cli = find_cmux_cli()
+    if not cli:
+        die("没找到 cmux（/Applications 下没有 cmux*.app），无法渲染。", 1)
+    fragment = build_after_side(chunk[1])
+    if not fragment.strip():
+        die("这个文件的改动没有「改后」内容（只有删除行）。", 1)
+    target = Path(tempfile.gettempdir()) / f"turn-diff-view-{int(time.time() * 1000)}.md"
+    target.write_text(fragment + "\n", encoding="utf-8")
+    result = subprocess.run(
+        [str(cli), "markdown", "open", str(target), "--focus", "false"],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        die(f"cmux 渲染失败：{(result.stderr or result.stdout).strip().splitlines()[0] if (result.stderr or result.stdout).strip() else '未知错误'}", 1)
+    surface = ""
+    for token in result.stdout.split():
+        if token.startswith("surface="):
+            surface = token
+    print(f"已交给 cmux 渲染改动片段：{chunk[0]}（{surface or '面板已打开'}，未抢焦点）")
+    print(f"临时文件：{target}")
+    return 0
 
 
 # ===== 彩色 patch =====
@@ -365,6 +446,9 @@ def main(argv: list[str]) -> int:
             verbs.append("list")
         elif arg == "file":
             verbs.append("file")
+        elif arg == "view":
+            verbs.append("file")
+            verbs.append("view")
         elif arg == "head":
             die("这个项目只看「本轮改了什么」。要看全部未提交改动，请直接用 git diff。")
         elif arg.isdigit():
@@ -430,6 +514,21 @@ def main(argv: list[str]) -> int:
         print()
         print("（这一轮没有存正文：这份报告是旧版本落盘的，或本轮没有文本改动。当前工作区可以直接 `git diff`。）")
         return 0
+
+    if "view" in verbs:
+        chunks = split_patch_by_file(patch)
+        if file_filter:
+            if file_filter.isdigit():
+                position = int(file_filter) - 1
+                if not 0 <= position < len(files):
+                    die(f"没有第 {file_filter} 个文件（先用 turn-diff list 看编号）。", 1)
+                wanted_path = str(files[position].get("path"))
+                chunks = [chunk for chunk in chunks if chunk[0] == wanted_path]
+            else:
+                chunks = [chunk for chunk in chunks if match_path(chunk[0], file_filter)]
+        if len(chunks) != 1:
+            die("view 一次只看一个文件：用 turn-diff view <编号> 指定（先 turn-diff list 看编号）。", 1)
+        return open_rendered(chunks[0])
 
     if file_filter:
         chunks = split_patch_by_file(patch)

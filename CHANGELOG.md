@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.2.0] - 2026-11-07
+
+### 新增（`view`：把改动片段交给 cmux 渲染，公式可排版）
+
+- **为什么**：用户看 Markdown 文章的 diff 时，`$\frac{...}$` 这类公式只能以源码出现，可读性差；cmux 的 markdown 面板自带 KaTeX，能把公式真正排版出来。整篇丢过去又看不到「改了哪一段」，所以要的是「改动片段 + 渲染」。
+- **改了什么**：新增 `view` 动词（会话 `/turn-diff view 2`、命令行 `turn-diff view 2`）。行为：取该文件各 hunk 的**改后一侧**（上下文 + 新增行，去掉 `diff --git` / `@@` / 删除行），写成临时 `.md`，再调 `cmux markdown open <临时文件> --focus false` 用 cmux 的 markdown 面板渲染；成功后回报面板引用，不抢焦点。找不到 cmux 时明确报错，不影响其它子命令。
+- **验证**：拿 SocialMediaManagerAgent 那篇文章的上一轮改动实测——`turn-diff list` 列出 3 个文件，`turn-diff view 1` 生成 15 行「改后」片段（其中 6 行含公式），cmux 打开 `surface:1000100057`，面板标题是临时文件；测试用的两个旧面板已关掉。
+- **边界**：这是片段不是整篇，跨 hunk 的 Markdown 结构（被切开的表格、断掉的段落）可能排版怪异，相对图片路径多半解析不了；`view` 是唯一需要 cmux 的子命令，其余功能仍为纯 git。
+
 ## [2.1.0] - 2026-11-07
 
 ### 新增（改动文件多时按文件看正文，不再一次糊满屏）

@@ -575,6 +575,64 @@ function formatChunkLabel(chunk: PatchChunk, report: ReportData, index: number):
   return `${index + 1}. ${chunk.path}  ${stat}`;
 }
 
+/** 找 cmux 的命令行（app 包内）；没装 cmux 时返回 null。 */
+function findCmuxCli(): string | null {
+  const homes = ["/Applications", path.join(os.homedir(), "Applications")];
+  const found: string[] = [];
+  for (const dir of homes) {
+    try {
+      for (const name of fs.readdirSync(dir)) {
+        if (!/^cmux.*\.app$/i.test(name)) continue;
+        const cli = path.join(dir, name, "Contents/Resources/bin/cmux");
+        if (fs.existsSync(cli)) found.push(cli);
+      }
+    } catch {
+      // 目录不存在就跳过
+    }
+  }
+  found.sort((left, right) => (left.includes("STAGING") ? -1 : right.includes("STAGING") ? 1 : 0));
+  return found[0] ?? null;
+}
+
+/**
+ * 把某个文件的 diff 段落转成「改后」的 markdown 片段：保留上下文与新增行、丢掉删除行与 diff 头。
+ * 用来交给 cmux 的 markdown 面板渲染（那边带 KaTeX，公式能排版）。
+ */
+function buildAfterSideFragment(chunkText: string): string {
+  const out: string[] = [];
+  const meta = /^(diff --git |index |--- |\+\+\+ |@@|new file mode|deleted file mode|old mode|new mode|similarity index|rename from|rename to)/;
+  for (const line of chunkText.split("\n")) {
+    if (meta.test(line)) continue;
+    if (line.startsWith("-")) continue;
+    if (line.startsWith("+") || line.startsWith(" ")) {
+      out.push(line.slice(1));
+      continue;
+    }
+    out.push(line);
+  }
+  return out.join("\n").replace(/^\n+/, "").replace(/\n+$/, "");
+}
+
+/** 把「改后片段」写到临时文件并交给 cmux 的 markdown 面板（不抢焦点）。 */
+async function openRenderedInCmux(chunk: PatchChunk): Promise<{ ok: boolean; message: string }> {
+  const cli = findCmuxCli();
+  if (!cli) return { ok: false, message: "没找到 cmux（/Applications 下没有 cmux*.app），无法渲染。" };
+  const fragment = buildAfterSideFragment(chunk.text);
+  if (!fragment.trim()) return { ok: false, message: "这个文件的改动没有「改后」内容（只有删除行）。" };
+  const target = path.join(os.tmpdir(), `turn-diff-view-${Date.now()}.md`);
+  try {
+    fs.writeFileSync(target, fragment + "\n");
+  } catch (error) {
+    return { ok: false, message: `写临时文件失败：${String(error)}` };
+  }
+  const result = await run(cli, ["markdown", "open", target, "--focus", "false"], undefined, 20_000);
+  if (!result.ok) {
+    return { ok: false, message: `cmux 渲染失败：${(result.stderr || result.error || "").trim().split("\n")[0]}` };
+  }
+  const surface = /surface=\S+/.exec(result.stdout)?.[0] ?? "";
+  return { ok: true, message: `已交给 cmux 渲染改动片段：${chunk.path}（${surface || "面板已打开"}，未抢焦点）` };
+}
+
 /** 统计行的加减号上色（CLI 与会话共用同一套）。 */
 function colorStat(kind: ReportFile["kind"], added: number, deleted: number): string {
   if (kind === "deleted") return `${C.delFg}-${deleted}${C.reset}`;
@@ -678,12 +736,14 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.registerCommand("turn-diff", {
-    description: "把上一轮 AI 改了什么贴进会话（纯 git）：不带参数给摘要，file 给正文（file 2 看某个文件），on/off 切换自动贴",
+    description:
+      "把上一轮 AI 改了什么贴进会话（纯 git）：不带参数给摘要，file 给正文（file 2 看某个文件），view 2 把该文件的改动片段交给 cmux 渲染（公式可排版），on/off 切换自动贴",
     handler: async (args: string, ctx: any) => {
       const tokens = (args ?? "").trim().toLowerCase().split(/\s+/).filter(Boolean);
 
       // 词表：file（正文，别名 patch）/ head（相对 HEAD）/ on / off；数字与其它词按位置解释。
       let wantBody = false;
+      let wantView = false;
       let turnIndex = 0;
       let fileFilter: string | null = null;
       for (let index = 0; index < tokens.length; index += 1) {
@@ -699,6 +759,17 @@ export default function (pi: ExtensionAPI) {
           // 项目只做「本轮 diff」；和 HEAD 比是另一个问题，交给 git
           ctx?.ui?.notify?.("这个项目只看「本轮改了什么」。要看全部未提交改动，请直接用 `git diff`。", "info");
           return;
+        }
+        if (token === "view") {
+          // view：把改动片段交给 cmux 渲染（公式等），不做逐行 diff
+          wantBody = true;
+          wantView = true;
+          const next = tokens[index + 1];
+          if (next && !["file", "patch", "head", "list", "view"].includes(next)) {
+            fileFilter = next;
+            index += 1;
+          }
+          continue;
         }
         if (token === "file" || token === "patch") {
           wantBody = true;
@@ -779,6 +850,15 @@ export default function (pi: ExtensionAPI) {
           if (!picked) return;
           const position = options.indexOf(picked);
           chosen = position <= 0 ? chunks : [chunks[position - 1]];
+        }
+        if (wantView) {
+          if (chosen.length > 1) {
+            ctx?.ui?.notify?.("view 一次只看一个文件；用 view <编号> 指定（先 /turn-diff list 看编号）。", "info");
+            return;
+          }
+          const rendered = await openRenderedInCmux(chosen[0]);
+          ctx?.ui?.notify?.(rendered.message, rendered.ok ? "info" : "error");
+          return;
         }
         report = { ...report, patch: chosen.map((chunk) => chunk.text).join("\n"), showPatch: true, fullPatch: true };
       }
