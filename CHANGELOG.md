@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 - **补：逐处改动列表**（同日再修订）：代码围栏只能整行上色，看不出「这句话里删了哪几个字」。文档最前面加一段「逐处改动」——把成对 `-`/`+` 行做词级 diff，只列真正变化的片段，删除用 `~~删除线~~`、新增用 `**加粗**`（渲染成真 markdown）。实测那篇文章的改动显示为 `- ~~（一般形式见上文那句话）~~`，被删的正是那句话。
 - **拆成两个面板**（同日修订）：用户提醒「cmux 的 diff-viewer 本来就有词级高亮」。核实：`view` 之前用的是 cmux 的 **markdown 面板**（带 KaTeX，但只能整行上色），而 cmux 另有 **diff 面板**——自带行级红绿，`wordDiffs` 选项（选项菜单里打开，存在 `~/Library/Application Support/cmux/diff-viewer/preferences.json`）还能词级高亮，只是不渲染 markdown/数学。所以按目的地拆开：`view` → cmux diff 面板（`cmux diff <临时 patch> --title <文件> --no-focus`），`render` → 原来的 markdown 渲染。
 - **`render` 改为纯改动视图**（同日再修订）：按用户要求——删除行整行红字、被删片段加中划线；新增行整行绿字、新增片段加下划线；未变动的行不渲染；不再放源码围栏（源码用 `file`）。做法：整行套 `<span class="hljs-deletion">` / `<span class="hljs-addition">`（这两个 class 是 cmux diff CSS 提供的红/绿配色，sanitizer 允许 class 但清行内 style），行内用 `<del>` / `<u>` 标词级改动。原文自带 `~~` / `<u>` 时，文档开头给一条 ⚠️ 提示，并把原文标记转义成字面显示（`~` → `&#126;`）以免混淆。
+- **`render` 改为开成标签页而不是 split**（同日修订）：用户指出默认位置应该是「某个标签页的右边」。`cmux markdown open` 的 API 只会 `newMarkdownSplit`（必新开分屏），而 `cmux open <file.md>` 会把 markdown 面板作为**标签页**塞进当前聚焦的 pane。所以 `render` 改用 `cmux open <临时文件> --no-focus`；实测面板落在同一 pane（surface:1000100078 与文章/上一份渲染同 pane），没有新分屏。注意 `view` 走的 cmux diff 面板仍然只能 split（其 API 没有 tab 模式）。
 - **验证**：拿 SocialMediaManagerAgent 那篇文章的上一轮改动实测——`turn-diff list` 列出 3 个文件，`turn-diff view 1` 生成 15 行「改后」片段（其中 6 行含公式），cmux 打开 `surface:1000100057`，面板标题是临时文件；测试用的两个旧面板已关掉。
 - **边界**：这是片段不是整篇，跨 hunk 的 Markdown 结构（被切开的表格、断掉的段落）可能排版怪异，相对图片路径多半解析不了；`view` 是唯一需要 cmux 的子命令，其余功能仍为纯 git。
 
