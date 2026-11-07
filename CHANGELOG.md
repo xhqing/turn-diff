@@ -14,6 +14,8 @@ All notable changes to this project will be documented in this file.
 - **`render` 改为纯改动视图**（同日再修订）：按用户要求——删除行整行红字、被删片段加中划线；新增行整行绿字、新增片段加下划线；未变动的行不渲染；不再放源码围栏（源码用 `file`）。做法：整行套 `<span class="hljs-deletion">` / `<span class="hljs-addition">`（这两个 class 是 cmux diff CSS 提供的红/绿配色，sanitizer 允许 class 但清行内 style），行内用 `<del>` / `<u>` 标词级改动。原文自带 `~~` / `<u>` 时，文档开头给一条 ⚠️ 提示，并把原文标记转义成字面显示（`~` → `&#126;`）以免混淆。
 - **`render` 改为开成标签页而不是 split**（同日修订）：用户指出默认位置应该是「某个标签页的右边」。`cmux markdown open` 的 API 只会 `newMarkdownSplit`（必新开分屏），而 `cmux open <file.md>` 会把 markdown 面板作为**标签页**塞进当前聚焦的 pane。所以 `render` 改用 `cmux open <临时文件> --no-focus`；实测面板落在同一 pane（surface:1000100078 与文章/上一份渲染同 pane），没有新分屏。注意 `view` 走的 cmux diff 面板仍然只能 split（其 API 没有 tab 模式）。
 - **`render` 打不开时不再直接失败**（同日再修订）：用户在实际会话里遇到 `cmux 渲染失败：not_found: Source surface not found`。根因是 pi 会话在 cmux 里启动时会带上 `CMUX_WORKSPACE_ID` / `CMUX_SURFACE_ID` 作为路由，面板关掉/换窗口后这两个值就失效了，CLI 解析失败。改法：调 cmux 时去掉这三个路由变量（保留 `CMUX_SOCKET*`，那是「连哪个 app 实例」的依据），并加一层退回——`cmux open` 失败时再试 `cmux markdown open`（会 split，但至少能看到）。实测：伪造失效的 `CMUX_SURFACE_ID`/`CMUX_WORKSPACE_ID` 后仍能正常打开面板。
+- **打开后直接把焦点切过去**（同日再修订）：用户敲完 `render` 就是想马上看，之前为了“不抢焦点”传的是 `--no-focus`，反而要多点一下。现在 `view` 与 `render` 都用 `--focus true`（实测新面板 `focused: true`）。
+- **修掉 `view` 在扩展里失效**：2.2.0 重写 `render` 时误删了 `openPatchInCmux` 函数（CLI 有、扩展没有），会话里 `view` 会直接 ReferenceError。本次补回，并统一走「清理 CMUX_* 路由环境变量 + 焦点切换」。
 - **验证**：拿 SocialMediaManagerAgent 那篇文章的上一轮改动实测——`turn-diff list` 列出 3 个文件，`turn-diff view 1` 生成 15 行「改后」片段（其中 6 行含公式），cmux 打开 `surface:1000100057`，面板标题是临时文件；测试用的两个旧面板已关掉。
 - **边界**：这是片段不是整篇，跨 hunk 的 Markdown 结构（被切开的表格、断掉的段落）可能排版怪异，相对图片路径多半解析不了；`view` 是唯一需要 cmux 的子命令，其余功能仍为纯 git。
 

@@ -80,7 +80,7 @@ turn-diff --color always    强制上色（另有 auto / never）
 
 Markdown 文章的 diff 里 `$...$` 是源码。想把「改动的那部分」当成排版后的文字来读，用 `render`：
 
-`render` 只呈现改动行：删除行用红底（`hljs-deletion`）并把被删的字加 `<del>` 中划线；新增行用绿底（`hljs-addition`）并把新增的字加 `<u>` 下划线。颜色借的是那个面板自带的 diff CSS（sanitizer 允许 class、不允许行内 `style`）。面板用 `cmux open --no-focus` 打开，也就是**当前 pane 里的一个标签页**，不再新开 split。未变动的行不显示，也不再放源码围栏——要看源码请用 `file`。如果原文本身就有 `~~` 或 `<u>`，文档开头会明确提示，并把原文标记按字面显示，避免和本次改动的划线混淆。cmux 自带 KaTeX，所以渲染那段的公式是真的排版出来的。用 `cmux markdown open --focus false` 打开，不抢焦点。
+`render` 只呈现改动行：删除行用红底（`hljs-deletion`）并把被删的字加 `<del>` 中划线；新增行用绿底（`hljs-addition`）并把新增的字加 `<u>` 下划线。颜色借的是那个面板自带的 diff CSS（sanitizer 允许 class、不允许行内 `style`）。面板用 `cmux open --focus true` 打开，也就是**当前 pane 里的一个标签页**（不是 split），并直接把焦点切过去，敲完就能看。未变动的行不显示，也不再放源码围栏——要看源码请用 `file`。如果原文本身就有 `~~` 或 `<u>`，文档开头会明确提示，并把原文标记按字面显示，避免和本次改动的划线混淆。cmux 自带 KaTeX，所以渲染那段的公式是真的排版出来的。
 
 边界：这是**片段**不是整篇——跨 hunk 的 Markdown 结构（被切开的表格、断掉的段落）可能排版怪异，相对图片路径多半也解析不了。另外这个子命令需要 cmux；其余功能仍然是纯 git。
 
