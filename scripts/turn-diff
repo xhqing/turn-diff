@@ -11,7 +11,8 @@
   turn-diff file              打印这一轮所有文件的正文
   turn-diff file 2            只看第 2 个文件（编号来自 list / 摘要）
   turn-diff file 'src/**'     只看路径匹配的文件（子串或通配）
-  turn-diff view 2            把第 2 个文件的「改后」片段交给 cmux 渲染（公式可排版）
+  turn-diff view 2            在 cmux 的 diff 面板打开第 2 个文件（行级红绿，可开词级高亮）
+  turn-diff render 2          把第 2 个文件的「改后」片段交给 cmux 的 markdown 面板（公式排版）
   turn-diff 2                 看再往前一轮
   turn-diff 2 file 3          第 2 轮里的第 3 个文件
   turn-diff --all             每个有轮次报告的仓库各一行摘要
@@ -283,6 +284,30 @@ def build_render_document(chunk_text: str) -> str:
     return "\n".join(parts) + "\n"
 
 
+def open_patch_in_cmux(chunk: tuple[str, str]) -> int:
+    """把该文件的 patch 交给 cmux 的 diff 面板（它自带行级红绿与可选的词级高亮）。"""
+    cli = find_cmux_cli()
+    if not cli:
+        die("没找到 cmux（/Applications 下没有 cmux*.app），无法打开 diff 面板。", 1)
+    target = Path(tempfile.gettempdir()) / f"turn-diff-patch-{int(time.time() * 1000)}.patch"
+    body = chunk[1] if chunk[1].endswith("\n") else chunk[1] + "\n"
+    target.write_text(body, encoding="utf-8")
+    result = subprocess.run(
+        [str(cli), "diff", str(target), "--title", chunk[0], "--no-focus"],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout).strip().splitlines()
+        die(f"cmux diff 打开失败：{detail[0] if detail else '未知错误'}", 1)
+    surface = ""
+    for token in result.stdout.split():
+        if token.startswith("surface="):
+            surface = token
+    print(f"已在 cmux 的 diff 面板打开：{chunk[0]}（{surface or '面板已打开'}，未抢焦点）")
+    return 0
+
+
 def open_rendered(chunk: tuple[str, str]) -> int:
     cli = find_cmux_cli()
     if not cli:
@@ -511,9 +536,9 @@ def main(argv: list[str]) -> int:
             verbs.append("list")
         elif arg == "file":
             verbs.append("file")
-        elif arg == "view":
+        elif arg in ("view", "render"):
             verbs.append("file")
-            verbs.append("view")
+            verbs.append(arg)
         elif arg == "head":
             die("这个项目只看「本轮改了什么」。要看全部未提交改动，请直接用 git diff。")
         elif arg.isdigit():
@@ -580,7 +605,7 @@ def main(argv: list[str]) -> int:
         print("（这一轮没有存正文：这份报告是旧版本落盘的，或本轮没有文本改动。当前工作区可以直接 `git diff`。）")
         return 0
 
-    if "view" in verbs:
+    if "view" in verbs or "render" in verbs:
         chunks = split_patch_by_file(patch)
         if file_filter:
             if file_filter.isdigit():
@@ -591,9 +616,10 @@ def main(argv: list[str]) -> int:
                 chunks = [chunk for chunk in chunks if chunk[0] == wanted_path]
             else:
                 chunks = [chunk for chunk in chunks if match_path(chunk[0], file_filter)]
+        verb = "view" if "view" in verbs else "render"
         if len(chunks) != 1:
-            die("view 一次只看一个文件：用 turn-diff view <编号> 指定（先 turn-diff list 看编号）。", 1)
-        return open_rendered(chunks[0])
+            die(f"{verb} 一次只看一个文件：用 turn-diff {verb} <编号> 指定（先 turn-diff list 看编号）。", 1)
+        return open_patch_in_cmux(chunks[0]) if verb == "view" else open_rendered(chunks[0])
 
     if file_filter:
         chunks = split_patch_by_file(patch)

@@ -42,7 +42,8 @@ The script deploys two things:
 /turn-diff file         the unified diff of the whole turn
 /turn-diff file 2       only file #2 from the listing
 /turn-diff file src/    only files whose path matches a fragment or glob
-/turn-diff view 2       hand the after-side of file #2 to cmux's markdown panel (math renders)
+/turn-diff view 2       open file #2 in cmux's diff panel (line colours, optional word diffs)
+/turn-diff render 2     render the after-side of file #2 in cmux's markdown panel (math typeset)
 /turn-diff 2            the turn before last
 /turn-diff 2 file 3     file #3 of that turn
 /turn-diff on|off       paste automatically at the end of every turn (default: off)
@@ -58,7 +59,8 @@ turn-diff file 2            only file #2 from the listing
 turn-diff file '*.ts'       only matching paths
 turn-diff 2                 one turn further back (1 = the latest)
 turn-diff 2 file 3          file #3 of that turn
-turn-diff view 2            open the after-side of file #2 in cmux (KaTeX renders the math)
+turn-diff view 2            open file #2 in cmux's diff panel
+turn-diff render 2          render the after-side of file #2 in cmux's markdown panel
 turn-diff --repo ~/x        same for another repo
 turn-diff --all             one line per repo that has a turn report
 turn-diff --json            machine-readable output
@@ -67,13 +69,16 @@ turn-diff --color always    force colors (auto / never for the other modes)
 
 `turn-diff` only reads the state the extension persisted, so it never starts a pi session and never touches a turn.
 
-## Rendered view (optional, needs cmux)
+## cmux panels (optional, need cmux)
 
-A diff of a Markdown article shows raw `$...$`. When you want to *read* the changed part with the math typeset, hand it to cmux's Markdown panel:
+Two panels, two jobs — pick the one that answers your question:
 
-```
-turn-diff view 2        # or /turn-diff view 2 inside a session
-```
+| Command | Panel | Shows | Math |
+|---|---|---|---|
+| `turn-diff view 2` | cmux diff viewer | the file's patch with line colours; enable **word diffs** in that panel's options menu for word-level highlights | raw `$...$` |
+| `turn-diff render 2` | cmux markdown viewer | a per-change list, the coloured diff fence, then the after-side rendered | typeset by KaTeX |
+
+A diff of a Markdown article shows raw `$...$`; when you want to *read* the changed part with the math typeset, use `render`:
 
 The temporary document has three parts: a **per-change list** (the fragments that actually changed, `~~removed~~ → **added**`, so a one-phrase deletion is obvious), a fenced `diff` block (highlight.js paints `+` green and `-` red — the Markdown sanitizer strips inline `style`, so a code fence is the only way to get colours in that panel), and below it the after-side of the hunks (context + added lines, diff markers stripped) rendered as Markdown. cmux bundles KaTeX, so formulas in the rendered part are really typeset. It opens with `cmux markdown open --focus false`, so it does not steal focus.
 
