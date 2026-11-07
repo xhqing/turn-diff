@@ -225,11 +225,59 @@ def fenced(language: str, body: str) -> str:
     return f"{fence}{language}\n{body}\n{fence}"
 
 
+def build_change_hints(chunk_text: str) -> list[str]:
+    """成对的 -/+ 行 → 「逐处改动」列表：删除片段 ~~删除线~~、新增片段 **加粗**。"""
+    lines = chunk_text.split("\n")
+    hints: list[str] = []
+    index = 0
+    while index < len(lines) and len(hints) < 20:
+        line = lines[index]
+        if not line.startswith("-") or line.startswith("--- "):
+            index += 1
+            continue
+        removed: list[str] = []
+        while index < len(lines) and lines[index].startswith("-") and not lines[index].startswith("--- "):
+            removed.append(lines[index][1:])
+            index += 1
+        added: list[str] = []
+        while index < len(lines) and lines[index].startswith("+") and not lines[index].startswith("+++ "):
+            added.append(lines[index][1:])
+            index += 1
+        pairs = min(len(removed), len(added))
+        for pair in range(pairs):
+            if len(hints) >= 20:
+                break
+            del_segments, add_segments = inline_tokens(removed[pair], added[pair])
+            del_text = "".join(text for text, strong in del_segments if strong)
+            add_text = "".join(text for text, strong in add_segments if strong)
+            if not del_text and not add_text:
+                continue
+            parts = []
+            if del_text:
+                parts.append(f"~~{del_text}~~")
+            if add_text:
+                parts.append(f"**{add_text}**")
+            hints.append("- " + " → ".join(parts))
+        for text in removed[pairs:]:
+            if len(hints) >= 20:
+                break
+            hints.append(f"- ~~{text}~~")
+        for text in added[pairs:]:
+            if len(hints) >= 20:
+                break
+            hints.append(f"- **{text}**")
+    return hints
+
+
 def build_render_document(chunk_text: str) -> str:
     """彩色 diff（```diff 走 hljs 上色）+ 改后的 markdown（由 cmux 的 KaTeX 排版）。"""
     diff_lines = [line for line in chunk_text.split("\n") if not line.startswith(CMUX_META)]
     after = build_after_side(chunk_text)
-    parts = ["**改动**（`+` 绿底为新增、`-` 红底为删除）", "", fenced("diff", "\n".join(diff_lines).rstrip("\n"))]
+    parts: list[str] = []
+    hints = build_change_hints(chunk_text)
+    if hints:
+        parts += ["**逐处改动**（~~删除~~ → **新增**）", "", "\n".join(hints), ""]
+    parts += ["**整段 diff**（`+` 绿底为新增、`-` 红底为删除）", "", fenced("diff", "\n".join(diff_lines).rstrip("\n"))]
     if after.strip():
         parts += ["", "**改后**（下方为渲染结果，公式已排版）", "", after]
     return "\n".join(parts) + "\n"

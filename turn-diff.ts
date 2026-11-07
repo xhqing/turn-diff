@@ -621,6 +621,62 @@ function fenced(language: string, body: string): string {
 }
 
 /**
+ * 把成对的 `-`/`+` 行做成「逐处改动」列表：删除的片段用 `~~..~~`、新增的用 `**..**`。
+ *
+ * 为什么需要它：代码围栏里只能整行上色（markdown 的 sanitizer 不允许行内样式），
+ * 一眼看不出「这句话里到底删了哪几个字」。渲染成真正的 markdown 段落就能用删除线/加粗。
+ */
+function buildChangeHints(chunkText: string): string[] {
+  const lines = chunkText.split("\n");
+  const hints: string[] = [];
+  let index = 0;
+  while (index < lines.length && hints.length < 20) {
+    const line = lines[index];
+    if (!line.startsWith("-") || line.startsWith("--- ")) {
+      index += 1;
+      continue;
+    }
+    const removed: string[] = [];
+    while (index < lines.length && lines[index].startsWith("-") && !lines[index].startsWith("--- ")) {
+      removed.push(lines[index].slice(1));
+      index += 1;
+    }
+    const added: string[] = [];
+    while (index < lines.length && lines[index].startsWith("+") && !lines[index].startsWith("+++ ")) {
+      added.push(lines[index].slice(1));
+      index += 1;
+    }
+    const pairs = Math.min(removed.length, added.length);
+    for (let pair = 0; pair < pairs && hints.length < 20; pair += 1) {
+      const { del, add } = inlineTokens(removed[pair], added[pair]);
+      const delText = del
+        .filter(([, strong]) => strong)
+        .map(([text]) => text)
+        .join("");
+      const addText = add
+        .filter(([, strong]) => strong)
+        .map(([text]) => text)
+        .join("");
+      if (!delText && !addText) continue;
+      const parts: string[] = [];
+      if (delText) parts.push(`~~${delText}~~`);
+      if (addText) parts.push(`**${addText}**`);
+      hints.push(`- ${parts.join(" → ")}`);
+    }
+    // 没配上的行也提示一下（整行新增 / 整行删除）
+    for (const text of removed.slice(pairs)) {
+      if (hints.length >= 20) break;
+      hints.push(`- ~~${text}~~`);
+    }
+    for (const text of added.slice(pairs)) {
+      if (hints.length >= 20) break;
+      hints.push(`- **${text}**`);
+    }
+  }
+  return hints;
+}
+
+/**
  * 组装交给 cmux 渲染的文档。
  *
  * 两段：上面是彩色 diff（```diff 走 hljs，新增行绿底、删除行红底——这是唯一能在
@@ -635,7 +691,12 @@ function buildRenderDocument(chunkText: string): string {
     diffLines.push(line);
   }
   const afterSide = buildAfterSideFragment(chunkText);
-  const sections = ["**改动**（`+` 绿底为新增、`-` 红底为删除）", "", fenced("diff", diffLines.join("\n").replace(/\n+$/, ""))];
+  const sections: string[] = [];
+  const hints = buildChangeHints(chunkText);
+  if (hints.length > 0) {
+    sections.push("**逐处改动**（~~删除~~ → **新增**）", "", hints.join("\n"), "");
+  }
+  sections.push("**整段 diff**（`+` 绿底为新增、`-` 红底为删除）", "", fenced("diff", diffLines.join("\n").replace(/\n+$/, "")));
   if (afterSide.trim()) {
     sections.push("", "**改后**（下方为渲染结果，公式已排版）", "", afterSide);
   }
