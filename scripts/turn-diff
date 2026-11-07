@@ -306,8 +306,10 @@ def open_rendered(chunk: tuple[str, str]) -> int:
         die("这个文件的改动没有可显示的内容。", 1)
     target = Path(tempfile.gettempdir()) / f"turn-diff-view-{int(time.time() * 1000)}.md"
     target.write_text(fragment + "\n", encoding="utf-8")
+    # 用 cmux open（而不是 cmux markdown open）：它把 .md 作为标签页塞进当前 pane，
+    # markdown open 则必定新开 split（用户明确不要 split）
     result = subprocess.run(
-        [str(cli), "markdown", "open", str(target), "--focus", "false"],
+        [str(cli), "open", str(target), "--no-focus"],
         capture_output=True,
         text=True,
     )

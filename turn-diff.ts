@@ -690,7 +690,9 @@ async function openRenderedInCmux(chunk: PatchChunk): Promise<{ ok: boolean; mes
   } catch (error) {
     return { ok: false, message: `写临时文件失败：${String(error)}` };
   }
-  const result = await run(cli, ["markdown", "open", target, "--focus", "false"], undefined, 20_000);
+  // 用 `cmux open` 而不是 `cmux markdown open`：前者把 .md 作为**标签页**放进当前聚焦的 pane，
+  // 后者一定会新开一个 split（用户明确不要 split）。
+  const result = await run(cli, ["open", target, "--no-focus"], undefined, 20_000);
   if (!result.ok) {
     return { ok: false, message: `cmux 渲染失败：${(result.stderr || result.error || "").trim().split("\n")[0]}` };
   }
