@@ -282,7 +282,7 @@ def open_patch_in_cmux(chunk: tuple[str, str]) -> int:
     body = chunk[1] if chunk[1].endswith("\n") else chunk[1] + "\n"
     target.write_text(body, encoding="utf-8")
     result = subprocess.run(
-        [str(cli), "diff", str(target), "--title", chunk[0], "--no-focus"],
+        [str(cli), "diff", str(target), "--title", chunk[0], "--focus", "true"],
         capture_output=True,
         text=True,
     )
@@ -293,7 +293,7 @@ def open_patch_in_cmux(chunk: tuple[str, str]) -> int:
     for token in result.stdout.split():
         if token.startswith("surface="):
             surface = token
-    print(f"已在 cmux 的 diff 面板打开：{chunk[0]}（{surface or '面板已打开'}，未抢焦点）")
+    print(f"已在 cmux 的 diff 面板打开：{chunk[0]}（{surface or '面板已打开'}，已切到该面板）")
     return 0
 
 
@@ -315,7 +315,7 @@ def open_rendered(chunk: tuple[str, str]) -> int:
     # markdown open 则必定新开 split（用户明确不要 split）
     env = cmux_call_env()
     result = subprocess.run(
-        [str(cli), "open", str(target), "--no-focus"],
+        [str(cli), "open", str(target), "--focus", "true"],
         capture_output=True,
         text=True,
         env=env,
@@ -323,7 +323,7 @@ def open_rendered(chunk: tuple[str, str]) -> int:
     if result.returncode != 0:
         # 退回老路径（会新开 split，但至少能看）
         result = subprocess.run(
-            [str(cli), "markdown", "open", str(target), "--focus", "false"],
+            [str(cli), "markdown", "open", str(target), "--focus", "true"],
             capture_output=True,
             text=True,
             env=env,
@@ -336,7 +336,7 @@ def open_rendered(chunk: tuple[str, str]) -> int:
     for token in result.stdout.split():
         if token.startswith("surface="):
             surface = token
-    print(f"已交给 cmux 渲染改动片段：{chunk[0]}（{surface or '面板已打开'}，未抢焦点）")
+    print(f"已交给 cmux 渲染改动片段：{chunk[0]}（{surface or '面板已打开'}，已切到该面板）")
     print(f"临时文件：{target}")
     return 0
 

@@ -698,7 +698,30 @@ function buildRenderDocument(chunkText: string): string {
   return [...header, "", ...out].join("\n").replace(/\n{3,}/g, "\n\n").trimEnd() + "\n";
 }
 
-/** 把「改后片段」写到临时文件并交给 cmux 的 markdown 面板（不抢焦点）。 */
+/**
+ * 把某个文件的 patch 交给 cmux 的 diff 面板（自带行级红绿 + 可开的词级高亮）。
+ *
+ * 注意这个面板只能分屏打开（cmux 的 diff API 没有 tab 模式）；打开后把焦点切过去，
+ * 因为用户敲命令的目的就是马上看。
+ */
+async function openPatchInCmux(chunk: PatchChunk): Promise<{ ok: boolean; message: string }> {
+  const cli = findCmuxCli();
+  if (!cli) return { ok: false, message: "没找到 cmux（/Applications 下没有 cmux*.app），无法打开 diff 面板。" };
+  const target = path.join(os.tmpdir(), `turn-diff-patch-${Date.now()}.patch`);
+  try {
+    fs.writeFileSync(target, chunk.text.endsWith("\n") ? chunk.text : `${chunk.text}\n`);
+  } catch (error) {
+    return { ok: false, message: `写临时 patch 失败：${String(error)}` };
+  }
+  const result = await run(cli, ["diff", target, "--title", chunk.path, "--focus", "true"], undefined, 30_000, cmuxCallEnv());
+  if (!result.ok) {
+    return { ok: false, message: `cmux diff 打开失败：${(result.stderr || result.error || "").trim().split("\n")[0]}` };
+  }
+  const surface = /surface=\S+/.exec(result.stdout)?.[0] ?? "";
+  return { ok: true, message: `已在 cmux 的 diff 面板打开：${chunk.path}（${surface || "面板已打开"}，已切到该面板）` };
+}
+
+/** 把渲染文档写到临时文件并交给 cmux 打开（打开后切焦点）。 */
 async function openRenderedInCmux(chunk: PatchChunk): Promise<{ ok: boolean; message: string }> {
   const cli = findCmuxCli();
   if (!cli) return { ok: false, message: "没找到 cmux（/Applications 下没有 cmux*.app），无法渲染。" };
@@ -712,16 +735,17 @@ async function openRenderedInCmux(chunk: PatchChunk): Promise<{ ok: boolean; mes
   }
   // 优先 `cmux open`：它把 .md 作为**标签页**放进当前聚焦的 pane；失败时退回 markdown open（会 split）。
   const env = cmuxCallEnv();
-  let result = await run(cli, ["open", target, "--no-focus"], undefined, 20_000, env);
+  // 用户敲这个命令就是为了马上看，所以直接把焦点切到新面板（--focus true）
+  let result = await run(cli, ["open", target, "--focus", "true"], undefined, 20_000, env);
   if (!result.ok) {
-    result = await run(cli, ["markdown", "open", target, "--focus", "false"], undefined, 20_000, env);
+    result = await run(cli, ["markdown", "open", target, "--focus", "true"], undefined, 20_000, env);
   }
   if (!result.ok) {
     const detail = (result.stderr || result.error || "").trim().split("\n")[0];
     return { ok: false, message: `cmux 渲染失败：${detail}（已试过 cmux open 与 cmux markdown open）` };
   }
   const surface = /surface=\S+/.exec(result.stdout)?.[0] ?? "";
-  return { ok: true, message: `已交给 cmux 渲染改动片段：${chunk.path}（${surface || "面板已打开"}，未抢焦点）` };
+  return { ok: true, message: `已交给 cmux 渲染改动片段：${chunk.path}（${surface || "面板已打开"}，已切到该面板）` };
 }
 
 /** 统计行的加减号上色（CLI 与会话共用同一套）。 */
