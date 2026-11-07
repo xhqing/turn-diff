@@ -75,7 +75,7 @@ Markdown 文章的 diff 里 `$...$` 是源码。想把「改动的那部分」�
 turn-diff view 2        # 会话里 /turn-diff view 2 同效
 ```
 
-它会取该文件各 hunk 的「改后」一侧（上下文 + 新增行，去掉 diff 标记），写成临时 `.md`，再用 `cmux markdown open --focus false` 打开（不抢焦点）。cmux 自带 KaTeX，公式是真的排版出来的。
+生成的临时文档分两段：上面是一个 `diff` 代码块（highlight.js 会给 `+` 行绿底、`-` 行红底——markdown 的 sanitizer 会清掉行内 `style`，所以代码围栏是那个面板里唯一能上色的方式）；下面是各 hunk 的「改后」一侧（上下文 + 新增行，去掉 diff 标记）按 markdown 渲染。cmux 自带 KaTeX，所以渲染那段的公式是真的排版出来的。用 `cmux markdown open --focus false` 打开，不抢焦点。
 
 边界：这是**片段**不是整篇——跨 hunk 的 Markdown 结构（被切开的表格、断掉的段落）可能排版怪异，相对图片路径多半也解析不了。另外这个子命令需要 cmux；其余功能仍然是纯 git。
 
