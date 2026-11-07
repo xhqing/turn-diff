@@ -76,11 +76,11 @@ Two panels, two jobs — pick the one that answers your question:
 | Command | Panel | Shows | Math |
 |---|---|---|---|
 | `turn-diff view 2` | cmux diff viewer | the file's patch with line colours; enable **word diffs** in that panel's options menu for word-level highlights | raw `$...$` |
-| `turn-diff render 2` | cmux markdown viewer | a per-change list, the coloured diff fence, then the after-side rendered | typeset by KaTeX |
+| `turn-diff render 2` | cmux markdown viewer | only the changed lines: removals in red with the removed words struck through, additions in green with the added words underlined; unchanged lines are left out | typeset by KaTeX |
 
 A diff of a Markdown article shows raw `$...$`; when you want to *read* the changed part with the math typeset, use `render`:
 
-The temporary document has three parts: a **per-change list** (the fragments that actually changed, `~~removed~~ → **added**`, so a one-phrase deletion is obvious), a fenced `diff` block (highlight.js paints `+` green and `-` red — the Markdown sanitizer strips inline `style`, so a code fence is the only way to get colours in that panel), and below it the after-side of the hunks (context + added lines, diff markers stripped) rendered as Markdown. cmux bundles KaTeX, so formulas in the rendered part are really typeset. It opens with `cmux markdown open --focus false`, so it does not steal focus.
+`render` shows only the lines that changed: a removed line is drawn with the diff viewer's red palette and the words that were removed are struck through; an added line uses the green palette and the added words are underlined. Colours come from the panel's own `.hljs-deletion` / `.hljs-addition` classes (the sanitizer allows class names, not inline `style`). Unchanged lines are dropped, and there is no source view — use `file` for that. If the content itself already contains `~~` or `<u>`, the document says so up front and prints those marks literally so they cannot be confused with this turn's marks. cmux bundles KaTeX, so formulas in the rendered part are really typeset. It opens with `cmux markdown open --focus false`, so it does not steal focus.
 
 Caveats: this is a fragment, not the whole file — Markdown structures that start outside the hunk (a table split by the hunk, a paragraph cut in half) may render oddly, and relative image paths probably will not resolve. It also means this one subcommand needs cmux; everything else stays pure git.
 
