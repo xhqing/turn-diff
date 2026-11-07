@@ -75,7 +75,7 @@ A diff of a Markdown article shows raw `$...$`. When you want to *read* the chan
 turn-diff view 2        # or /turn-diff view 2 inside a session
 ```
 
-The temporary document has two parts: a fenced `diff` block (highlight.js paints `+` green and `-` red — the Markdown sanitizer strips inline `style`, so a code fence is the only way to get colours in that panel) and, below it, the after-side of the hunks (context + added lines, diff markers stripped) rendered as Markdown. cmux bundles KaTeX, so formulas in the rendered part are really typeset. It opens with `cmux markdown open --focus false`, so it does not steal focus.
+The temporary document has three parts: a **per-change list** (the fragments that actually changed, `~~removed~~ → **added**`, so a one-phrase deletion is obvious), a fenced `diff` block (highlight.js paints `+` green and `-` red — the Markdown sanitizer strips inline `style`, so a code fence is the only way to get colours in that panel), and below it the after-side of the hunks (context + added lines, diff markers stripped) rendered as Markdown. cmux bundles KaTeX, so formulas in the rendered part are really typeset. It opens with `cmux markdown open --focus false`, so it does not steal focus.
 
 Caveats: this is a fragment, not the whole file — Markdown structures that start outside the hunk (a table split by the hunk, a paragraph cut in half) may render oddly, and relative image paths probably will not resolve. It also means this one subcommand needs cmux; everything else stays pure git.
 
