@@ -297,6 +297,11 @@ def open_patch_in_cmux(chunk: tuple[str, str]) -> int:
     return 0
 
 
+def cmux_call_env() -> dict:
+    """调 cmux 时去掉调用者上下文（失效的 surface 会让 CLI 报 Source surface not found）。"""
+    return {k: v for k, v in os.environ.items() if k not in ("CMUX_WORKSPACE_ID", "CMUX_SURFACE_ID", "CMUX_PANEL_ID")}
+
+
 def open_rendered(chunk: tuple[str, str]) -> int:
     cli = find_cmux_cli()
     if not cli:
@@ -308,13 +313,25 @@ def open_rendered(chunk: tuple[str, str]) -> int:
     target.write_text(fragment + "\n", encoding="utf-8")
     # 用 cmux open（而不是 cmux markdown open）：它把 .md 作为标签页塞进当前 pane，
     # markdown open 则必定新开 split（用户明确不要 split）
+    env = cmux_call_env()
     result = subprocess.run(
         [str(cli), "open", str(target), "--no-focus"],
         capture_output=True,
         text=True,
+        env=env,
     )
     if result.returncode != 0:
-        die(f"cmux 渲染失败：{(result.stderr or result.stdout).strip().splitlines()[0] if (result.stderr or result.stdout).strip() else '未知错误'}", 1)
+        # 退回老路径（会新开 split，但至少能看）
+        result = subprocess.run(
+            [str(cli), "markdown", "open", str(target), "--focus", "false"],
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+    if result.returncode != 0:
+        raw = (result.stderr or result.stdout).strip()
+        detail = raw.splitlines()[0] if raw else "未知错误"
+        die(f"cmux 渲染失败：{detail}（已试过 cmux open 与 cmux markdown open）", 1)
     surface = ""
     for token in result.stdout.split():
         if token.startswith("surface="):
