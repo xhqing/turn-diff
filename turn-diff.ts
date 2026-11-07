@@ -69,12 +69,18 @@ interface RunResult {
   error?: string;
 }
 
-function run(command: string, args: string[], cwd?: string, timeoutMs = 30_000): Promise<RunResult> {
+function run(
+  command: string,
+  args: string[],
+  cwd?: string,
+  timeoutMs = 30_000,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<RunResult> {
   return new Promise((resolve) => {
     execFile(
       command,
       args,
-      { cwd, timeout: timeoutMs, maxBuffer: 16 * 1024 * 1024 },
+      { cwd, timeout: timeoutMs, maxBuffer: 16 * 1024 * 1024, env },
       (error: any, stdout: string, stderr: string) => {
         const code = typeof error?.code === "number" ? error.code : error ? null : 0;
         resolve({
@@ -575,6 +581,20 @@ function formatChunkLabel(chunk: PatchChunk, report: ReportData, index: number):
   return `${index + 1}. ${chunk.path}  ${stat}`;
 }
 
+/**
+ * 调 cmux 时用的环境变量：去掉「调用者上下文」那几个。
+ *
+ * pi 会话可能在 cmux 里启动，此时 `CMUX_WORKSPACE_ID` / `CMUX_SURFACE_ID` 会被 cmux 的
+ * CLI 当成路由依据；如果那个 surface 已经被关掉（或换了窗口），CLI 会直接报
+ * `Source surface not found`。去掉它们，让 cmux 用「当前聚焦的面板」自己判断。
+ * 注意 `CMUX_SOCKET` / `CMUX_SOCKET_PATH` 要保留——那是「连哪个 app 实例」的依据。
+ */
+function cmuxCallEnv(): NodeJS.ProcessEnv {
+  const env = { ...process.env };
+  for (const key of ["CMUX_WORKSPACE_ID", "CMUX_SURFACE_ID", "CMUX_PANEL_ID"]) delete env[key];
+  return env;
+}
+
 /** 找 cmux 的命令行（app 包内）；没装 cmux 时返回 null。 */
 function findCmuxCli(): string | null {
   const homes = ["/Applications", path.join(os.homedir(), "Applications")];
@@ -690,11 +710,15 @@ async function openRenderedInCmux(chunk: PatchChunk): Promise<{ ok: boolean; mes
   } catch (error) {
     return { ok: false, message: `写临时文件失败：${String(error)}` };
   }
-  // 用 `cmux open` 而不是 `cmux markdown open`：前者把 .md 作为**标签页**放进当前聚焦的 pane，
-  // 后者一定会新开一个 split（用户明确不要 split）。
-  const result = await run(cli, ["open", target, "--no-focus"], undefined, 20_000);
+  // 优先 `cmux open`：它把 .md 作为**标签页**放进当前聚焦的 pane；失败时退回 markdown open（会 split）。
+  const env = cmuxCallEnv();
+  let result = await run(cli, ["open", target, "--no-focus"], undefined, 20_000, env);
   if (!result.ok) {
-    return { ok: false, message: `cmux 渲染失败：${(result.stderr || result.error || "").trim().split("\n")[0]}` };
+    result = await run(cli, ["markdown", "open", target, "--focus", "false"], undefined, 20_000, env);
+  }
+  if (!result.ok) {
+    const detail = (result.stderr || result.error || "").trim().split("\n")[0];
+    return { ok: false, message: `cmux 渲染失败：${detail}（已试过 cmux open 与 cmux markdown open）` };
   }
   const surface = /surface=\S+/.exec(result.stdout)?.[0] ?? "";
   return { ok: true, message: `已交给 cmux 渲染改动片段：${chunk.path}（${surface || "面板已打开"}，未抢焦点）` };
