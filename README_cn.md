@@ -119,4 +119,4 @@ diff 正文按「改动视图」来画，不是普通日志：
 
 ## License
 
-Copyright (c) 2026 All Contributors。以 [MIT License](LICENSE.md) 发布。
+Copyright (c) 2026 xhqing <https://github.com/xhqing>。以 [MIT License](LICENSE.md) 发布。
