@@ -1,13 +1,6 @@
-# turn-diff 项目规则（Worker 追加）
+# turn-diff · 项目硬约束
 
-你在 **turn-diff** 项目里干活。本文件由 pi 在会话启动时自动追加到系统提示，只写本项目特有的规矩；Agent 的通用身份与全局规则由 `AGENTS.md` 软链接提供，此处不重述。
-
-## 你的角色
-
-你是 Atlas（FullStackEngineerAgent）派来的 **Worker**，只负责当前 worktree 里的这一件事。
-
-- 干完向 Leader 汇报：改了什么、验证结果、PR 号、遗留问题。
-- **不碰 local main、不建 / 删 worktree**——那是 Leader 的活。
+身份与角色见本仓库根 `AGENTS.md`；团队通用规则见全局 `~/.pi/agent/AGENTS.md`，此处不重述。
 
 ## 本项目是什么
 
@@ -28,18 +21,18 @@
 
 ## 硬约束
 
-- **只经由 cmux CLI 操作面板**：`cmux diff` 开、`cmux close-surface` 关。不要自己实现 diff 渲染、不要写系统级窗口操作。
-- **关闭只针对本扩展登记过的面板**：绝不按名字 / 序号盲目关，用户自己开的面板必须原样保留。这是本扩展存在的前提（README「Why」一节）。
-- **`--no-focus` 类行为要保留**：打开面板不应抢走用户正在用 cmux 的焦点（具体参数名以当前 `cmux diff` 的 CLI 为准，改之前先 `cmux diff --help` 核对）。
-- 单文件实现、零外部依赖（只用 pi 扩展 API + `cmux` CLI）。要加依赖先在汇报里说明理由。
+- **面板能力只经由 cmux CLI**：`view` → `cmux diff <临时 patch>`，`render` → `cmux open` / `cmux markdown open`。不自己实现 diff 渲染、不写系统级窗口操作；找不到 cmux 时明确报错，不影响其它子命令。
+- **`view` / `render` 切换焦点是刻意的**（`--focus true`）：用户敲这个命令就是为了马上看到结果。除此之外不要额外加抢焦点动作（打开面板时保持同一套调用方式）。
+- **范围只做「本轮 diff」**：不提供和 HEAD / 分支对比的口径——要看全部未提交改动就用 `git diff`。
+- 单文件实现、零外部依赖（只用 pi 扩展 API + 可选的 `cmux` CLI）。要加依赖先在汇报里说明理由。
 - 版本号以 `VERSION` 为权威，与 `CHANGELOG.md` / README 徽章一致；不在功能分支 bump。
 - 改动记 `CHANGELOG.md`，待办记 `TODO.md`；临时产物放 `tmp/`。
 
 ## 验证
 
-- 改完在 cmux 里实测两条命令：`/open-diff` 能开、`/close-diff` 只关自己开的那个。
-- 同时开一个**用户自己的** diff 面板，确认 `/close-diff` 不会误关它。
-- 验证「本轮无改动」时命令给出的是明确提示而不是报错。
+- 改完实测：`/turn-diff view 1` 与 `/turn-diff render 1` 能打开对应面板、内容与改动一致；`/turn-diff` 不带参数给摘要。
+- 机器上没装 cmux 时，`view` / `render` 给出明确提示而不是报错崩溃（改这块之前先临时改名 `/Applications/cmux*.app` 复核，或直接看代码分支）。
+- 验证「本轮无改动」时给的是明确提示而不是空输出。
 
 ## 详细说明
 
