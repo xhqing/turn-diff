@@ -119,4 +119,4 @@ Prefer `git stash create` over patching the index: it captures staged *and* unst
 
 ## License
 
-Copyright (c) 2026 All Contributors. Released under the [MIT License](LICENSE.md).
+Copyright (c) 2026 xhqing <https://github.com/xhqing>. Released under the [MIT License](LICENSE.md).
