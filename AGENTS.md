@@ -1,12 +1,12 @@
 # turn-diff
 
-> FullStackEngineerAgent（Atlas）名下的子项目 · 本项目规则本体
+> dev-agent（Atlas）名下的子项目 · 本项目规则本体
 
 一个 **pi 扩展 + 一个命令行工具**，只回答一个问题：「这一轮 AI 改了什么」。扩展每轮记 git 基线、轮次结束算增量并落盘；会话里用 `/turn-diff`、终端里用 `turn-diff` 读同一份状态。
 
 ## 归谁负责
 
-本项目由 **Atlas**（FullStackEngineerAgent）负责维护。改动范围跨出本项目时，先向 Atlas 说明，不自行扩张改动面。
+本项目由 **Atlas**（dev-agent）负责维护。改动范围跨出本项目时，先向 Atlas 说明，不自行扩张改动面。
 
 ## 你的角色
 
