@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### 新增（单元测试：基线 / 统计 / patch 生成，接进 CI 门禁）
+
+- **为什么改**：本项目此前只有语法检查与结构冒烟，没有任何真实测试——「只算本轮增量」这条核心逻辑（基线捕获、脏改动不进本轮、新未跟踪文件按新建算）完全靠手工验证，改一次就要人肉试一遍。按 dev-agent 的回归防护网要求补齐这一层。
+- **改了什么**：
+  - 新增 `test/turn-diff.test.ts`（7 条用例，node:test + 类型擦除，不引入测试框架）：`git status --porcelain -z` 解析（含重命名跳过源路径）、patch 行分类、行数 / 指纹，以及真实 git 仓库的集成用例——「改已跟踪文件 + 新增未跟踪文件」的统计与 patch、「基线之前的脏改动不计入本轮」、「本轮无改动返回 null」。
+  - `turn-diff.ts` 给 10 个纯函数加 `export`（只增加导出，函数体与行为零改动），让测试可以直接 import 它们。
+  - 新增 `package.json`（只服务于测试：`pretest` 建 `pi-tui` 软链、`test` 跑 node:test）与 `test/stubs/pi-tui/`（渲染模块的最小替身，测试不碰渲染）。
+  - `.github/workflows/ci.yml` 的 `validate` job 加 `npm test` step——job 名与其 required 状态不变，测试因此自动成为合并门禁的一部分。
+  - `.pi/APPEND_SYSTEM.md` 新增「测试文件对 Worker 只读」节（测试定义权在 Leader，Worker 只读可运行）。
+- **回归检查**：① 扩展与命令行的运行时行为零改动（只加导出与测试资产）；② `install.sh` 仍只拷 `turn-diff.ts`，新增测试资产不会进 pi 的扩展目录；③ 版本号不动（测试与文档类改动），`[Unreleased]` 节不影响版本一致性检查取到的 `2.2.0`；④ 原有三步检查（语法 / shell / 结构冒烟）一字未改。
+
 ## [2.2.0] - 2026-11-07
 
 ### 新增（`view`：把改动片段交给 cmux 渲染，公式可排版）

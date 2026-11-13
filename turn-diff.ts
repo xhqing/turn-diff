@@ -105,7 +105,7 @@ function canonicalPath(target: string): string {
   }
 }
 
-async function gitRoot(dir: string): Promise<string | null> {
+export async function gitRoot(dir: string): Promise<string | null> {
   const result = await git(dir, ["rev-parse", "--show-toplevel"]);
   if (!result.ok) return null;
   const root = result.stdout.trim().split("\n")[0];
@@ -200,7 +200,7 @@ interface LastReportState {
 
 // ===== 基线 =====
 
-function fingerprintFile(absPath: string): string {
+export function fingerprintFile(absPath: string): string {
   try {
     const stat = fs.statSync(absPath);
     return `${stat.size}:${Math.round(stat.mtimeMs)}`;
@@ -210,7 +210,7 @@ function fingerprintFile(absPath: string): string {
 }
 
 /** `git status --porcelain -z` → `{ code, path }`；重命名 / 复制取新路径。 */
-function parseStatusEntries(buffer: string): Array<{ code: string; path: string }> {
+export function parseStatusEntries(buffer: string): Array<{ code: string; path: string }> {
   const chunks = buffer.split("\0");
   const entries: Array<{ code: string; path: string }> = [];
   for (let index = 0; index < chunks.length; index += 1) {
@@ -224,7 +224,7 @@ function parseStatusEntries(buffer: string): Array<{ code: string; path: string 
   return entries;
 }
 
-function countFileLines(absPath: string): number {
+export function countFileLines(absPath: string): number {
   try {
     const text = fs.readFileSync(absPath, "utf8");
     if (!text) return 0;
@@ -235,7 +235,7 @@ function countFileLines(absPath: string): number {
 }
 
 /** 记本轮基线；不在 git 仓库、或仓库还没有提交时返回 null。 */
-async function captureTurnBaseline(cwd: string): Promise<TurnBaseline | null> {
+export async function captureTurnBaseline(cwd: string): Promise<TurnBaseline | null> {
   const repoRoot = await gitRoot(cwd);
   if (!repoRoot) return null;
   const headResult = await git(repoRoot, ["rev-parse", "HEAD"]);
@@ -257,7 +257,7 @@ async function captureTurnBaseline(cwd: string): Promise<TurnBaseline | null> {
 
 // ===== 从基线算增量 =====
 
-async function buildTurnReport(baseline: TurnBaseline): Promise<ReportData | null> {
+export async function buildTurnReport(baseline: TurnBaseline): Promise<ReportData | null> {
   const { repoRoot, head, snapshot } = baseline;
   const base = snapshot ?? head;
   const numstat = await git(repoRoot, ["diff", "--numstat", base]);
@@ -313,7 +313,7 @@ async function buildTurnReport(baseline: TurnBaseline): Promise<ReportData | nul
 }
 
 /** 生成这一轮的 unified diff（已跟踪文件 + 新出现的未跟踪文件）。 */
-async function buildTurnPatch(baseline: TurnBaseline): Promise<{ patch: string; truncated: boolean }> {
+export async function buildTurnPatch(baseline: TurnBaseline): Promise<{ patch: string; truncated: boolean }> {
   const { repoRoot, head, snapshot } = baseline;
   const base = snapshot ?? head;
   const chunks: string[] = [];
@@ -388,7 +388,7 @@ interface PatchLine {
   text: string;
 }
 
-function classifyPatchLine(line: string): PatchLine {
+export function classifyPatchLine(line: string): PatchLine {
   const isHeader =
     line.startsWith("diff ") ||
     line.startsWith("index ") ||
@@ -404,12 +404,12 @@ function classifyPatchLine(line: string): PatchLine {
 }
 
 /** 切成词元，保留空白与标点，方便做行内 diff。 */
-function tokenize(line: string): string[] {
+export function tokenize(line: string): string[] {
   return line.match(/\s+|\w+|[^\s\w]/g) ?? [];
 }
 
 /** 两行之间的 token 级 LCS：返回每段属于 `equal` / `del` / `add`。 */
-function inlineTokens(removed: string, added: string): { del: Array<[string, boolean]>; add: Array<[string, boolean]> } {
+export function inlineTokens(removed: string, added: string): { del: Array<[string, boolean]>; add: Array<[string, boolean]> } {
   const left = tokenize(removed);
   const right = tokenize(added);
   if (left.length === 0 || right.length === 0 || left.length > MAX_INLINE_TOKENS || right.length > MAX_INLINE_TOKENS) {
