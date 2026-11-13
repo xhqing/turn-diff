@@ -1,0 +1,11 @@
+{
+  "name": "turn-diff",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "本轮 diff 的 pi 扩展与命令行（本清单只服务于测试，不参与运行）",
+  "scripts": {
+    "pretest": "mkdir -p node_modules && ln -sfn ../test/stubs/pi-tui node_modules/pi-tui",
+    "test": "node --experimental-strip-types --test test/*.test.ts"
+  }
+}
